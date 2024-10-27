@@ -1,0 +1,11 @@
+# The API key for the Urban Environmentalists IL Action Network Account
+# https://actionnetwork.org/groups/urban-environmentalists-il/apis
+action-network-api-key = ""
+
+# Dir to write cache and state to (defaults to system temp dir.)
+cache-dir = ""
+
+# The minimum number of sqft a ward needs to be included in a zipcode area
+# for us to assign the ward as a possible ward for people living in that
+# zipcode.
+min-zip-sqft = 10000
