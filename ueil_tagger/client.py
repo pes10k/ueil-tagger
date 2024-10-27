@@ -82,6 +82,11 @@ class Client:
         return self.__get(PEOPLE_ENDPOINT, params)
 
 
+    def get_person(self, person_uuid: Uuid) -> Any:
+        url = f"{PEOPLE_ENDPOINT}/{person_uuid}"
+        return self.__get(url, {})
+
+
     def set_tagging_for_person(self, tag_uuid: Uuid, person_uuid: Uuid,
                                background: bool = True) -> bool:
         person_url = f"{PEOPLE_ENDPOINT}/{person_uuid}"

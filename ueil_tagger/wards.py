@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import logging
+from pprint import pformat
 from typing import cast, Optional, TYPE_CHECKING
 
 from shapely import Point
@@ -11,7 +12,7 @@ import shapely.wkt
 from ueil_tagger import DATA_DIR_PATH
 from ueil_tagger.client import Client
 from ueil_tagger.geolocate import coords_for_address
-from ueil_tagger.types import Member
+from ueil_tagger.types import Member, WardTaggingStrategy
 
 if TYPE_CHECKING:
     from shapely import MultiPolygon
@@ -60,6 +61,8 @@ def significant_wards_for_zip(min_ward_sqft: int) -> SigWardZipData:
 
 def ward_for_address(address: str) -> Optional[WardNum]:
     coords = coords_for_address(address)
+    if not coords:
+        return None
     point = Point(coords.long, coords.lat)
     ward_data = load_ward_data()
     for ward in ward_data:
@@ -69,29 +72,30 @@ def ward_for_address(address: str) -> Optional[WardNum]:
 
 
 def wards_for_member(member: Member,
-                     min_ward_sqft: int) -> Optional[list[WardNum]]:
+                     min_ward_sqft: int) -> Optional[tuple[list[WardNum], WardTaggingStrategy]]:
     sig_wards_for_zip = significant_wards_for_zip(min_ward_sqft)
     ward: int | None = None
     if member.custom_field_ward:
         ward = member.custom_field_ward
         logging.debug("person=%s: assigned ward '%s' based on custom field",
                       member.identifier, ward)
-        return [ward]
-    member_address = member.full_address()
-    if member_address:
-        ward = ward_for_address(member_address)
-        if ward:
-            logging.debug("person=%s: assigned ward '%s' by geocoding '%s'",
-                          member.identifier, ward, member_address)
-            return [ward]
-        logging.error("person=%s: couldn't geocode ward from address '%s'",
-                        member.identifier, member_address)
+        return ([ward], WardTaggingStrategy.FIELD)
+    if member.has_street_address():
+        member_address = member.full_address()
+        if member_address:
+            ward = ward_for_address(member_address)
+            if ward:
+                logging.debug("person=%s: assigned ward '%s' by geocoding '%s'",
+                            member.identifier, ward, member_address)
+                return ([ward], WardTaggingStrategy.ADDRESS)
+            logging.error("person=%s: couldn't geocode ward from address '%s'",
+                            member.identifier, member_address)
     if member.zipcode:
         if member.zipcode in sig_wards_for_zip:
             wards = sig_wards_for_zip[member.zipcode]
             logging.debug("person=%s: assigned wards '%s' based on zip '%s'",
                           member.identifier, json.dumps(wards), member.zipcode)
-            return wards
+            return (wards, WardTaggingStrategy.ZIPCODE)
     logging.debug("person=%s: unable to assign a ward", member.identifier)
     return None
 
@@ -120,4 +124,6 @@ def get_ward_id_to_uuid_mapping(client: Client) -> dict[WardNum, Uuid]:
         msg = f"Found unexpected number of ward tags: {num_tags}"
         logging.error(msg)
         raise ValueError(msg)
+    logging.debug("Successfully found 50 ward tags in the database: %s",
+                  pformat(ward_tags))
     return ward_tags

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
-from datetime import datetime
+import datetime
 import logging
 import sys
 
@@ -15,6 +15,7 @@ last_run_datetime = ueil_tagger.config.get_last_run()
 
 PARSER = argparse.ArgumentParser(
     prog=ueil_tagger.APP_NAME,
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     description="Updates the Ward tags in the UE IL ActionNetwork database.")
 PARSER.add_argument(
     "--version",
@@ -23,14 +24,12 @@ PARSER.add_argument(
 PARSER.add_argument(
     "--api-key",
     default=ueil_tagger.config.get_api_key(),
-    required=True,
     help="API key for the UE IL database, from "
          "https://actionnetwork.org/groups/urban-environmentalists-il/apis.")
 PARSER.add_argument(
     "--min-sqft",
     default=ueil_tagger.config.get_min_zip_sqft(),
     type=float,
-    required=True,
     help="The minimum number of square feet that a zipcode must overlap with "
          "a ward's area in order for members in that zipcode to be tagged with "
          "the ward.")
@@ -51,10 +50,14 @@ ARGS = PARSER.parse_args()
 UPDATED_SINCE = None
 if ARGS.since:
     try:
-        UPDATED_SINCE = datetime.fromisoformat(ARGS.since)
+        UPDATED_SINCE = datetime.datetime.fromisoformat(ARGS.since)
     except ValueError:
         logging.error("Invalid date for --since argument: %s", UPDATED_SINCE)
         sys.exit(1)
+
+if not ARGS.api_key:
+    logging.error("Must provide am API key, either with --api-key or in 'config.toml'")
+    sys.exit(1)
 
 if ARGS.verbose == 0:
     logging.basicConfig(level=logging.ERROR)
@@ -67,6 +70,6 @@ CLIENT = ueil_tagger.client.Client(ARGS.api_key)
 
 SUMMARY = ueil_tagger.members.set_ward_tags_for_all_members_since(
     CLIENT, ARGS.min_sqft, UPDATED_SINCE)
-ueil_tagger.config.set_last_run(datetime.now())
+ueil_tagger.config.set_last_run(datetime.datetime.now(datetime.timezone.utc))
 print(SUMMARY.to_json())
 sys.exit(0)

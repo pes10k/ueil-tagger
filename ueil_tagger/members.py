@@ -1,15 +1,39 @@
 from __future__ import annotations
 
 from datetime import datetime
+import json
 import logging
-from typing import Optional, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING
 
 from ueil_tagger.client import Client
-from ueil_tagger.types import Member, TaggingsSummary
+from ueil_tagger.types import Member, TaggingsSummary, WardTaggingStrategy
 from ueil_tagger.wards import get_ward_id_to_uuid_mapping, wards_for_member
 
 if TYPE_CHECKING:
-    from ueil_tagger.types import Uuid, WardNum
+    from ueil_tagger.types import Uuid, WardNum, ZipCode
+
+
+def field_to_zip(field: Optional[str]) -> Optional[ZipCode]:
+    if not field:
+        return None
+    if len(field) > 5:
+        field = field[0:5]
+
+    try:
+        return int(field)
+    except ValueError:
+        pass
+    return None
+
+
+def uuid_for_member_record(record: dict[str, Any]) -> Optional[Uuid]:
+    if "identifiers" not in record:
+        return None
+    for identifier_record in record["identifiers"]:
+        if not identifier_record.startswith("action_network:"):
+            continue
+        return str(identifier_record.replace("action_network:", ""))
+    return None
 
 
 def get_members_updated_since(client: Client,
@@ -26,40 +50,40 @@ def get_members_updated_since(client: Client,
             break
 
         for record in records:
-            record_uuid = record["identifiers"][0].replace("action_network:", "")
+            record_uuid = uuid_for_member_record(record)
+            if not record_uuid:
+                logging.error("Unable to find an action network identifier for "
+                              "record:\n%s", json.dumps(record))
+                continue
             if since:
                 modified_date = record["modified_date"]
-                logging.debug("person=%s: not updated since '%s'",
-                              record_uuid, modified_date)
                 modified_date = datetime.fromisoformat(modified_date)
                 if modified_date < since:
-                    continue
-            address_lines = None
-            city = None
-            state = None
-            zipcode = None
+                    raise ValueError("Unexpected person result\n"
+                                     f"person={record_uuid}: was updated after "
+                                     f"the given date '{modified_date}'")
+
             custom_field_ward = None
+            try:
+                custom_field_int = int(record["custom_fields"]["Aldermanic Ward"])
+                if 0 < custom_field_int <= 50:
+                    custom_field_ward = custom_field_int
+            except KeyError:
+                pass
+            except ValueError:
+                logging.error(
+                    "person=%s: Unexpected value for 'Aldermanic Ward' field, '%s'",
+                    record_uuid, record["custom_fields"]["Aldermanic Ward"])
 
             if "postal_addresses" in record:
                 address = record["postal_addresses"][0]
-                address_lines = address.get("address_lines")
-                city = address.get("locality")
-                state = address.get("region")
-                zipcode = address.get("postal_code")
-                if zipcode and len(zipcode) > 5:
-                    zipcode = zipcode[0:5]
+                possible_zipcode = address.get("postal_code")
+                zipcode = field_to_zip(possible_zipcode)
 
-                try:
-                    custom_field_ward = int(record["custom_fields"]["Aldermanic Ward"])
-                except KeyError:
-                    pass
-                except ValueError:
-                    logging.error(
-                        "person=%s: Unexpected value for 'Aldermanic Ward' field, '%s'",
-                        record_uuid, record["custom_fields"]["Aldermanic Ward"])
-
-            members.append(Member(record_uuid, address_lines, city, state,
-                                  zipcode, custom_field_ward))
+                member = Member(record_uuid, address.get("address_lines"),
+                    address.get("locality"), address.get("region"),
+                    zipcode, custom_field_ward)
+                members.append(member)
         page_index += 1
     return members
 
@@ -93,14 +117,24 @@ def set_ward_tags_for_all_members_since(
     for member in members:
         tagggings_removed = clear_ward_tags_from_member(client, member,
                                                         ward_id_uuid_map)
-        summary.taggings_deleted = tagggings_removed
-        wards = wards_for_member(member, min_sqft)
-        if not wards:
+        summary.taggings_deleted += tagggings_removed
+        ward_result = wards_for_member(member, min_sqft)
+        if not ward_result:
+            summary.members_not_tagged += 1
             if tagggings_removed > 0:
                 summary.members_modified += 1
             logging.info("person=%s: not tagging to any wards",
                          member.identifier)
             continue
+
+        wards, strategy = ward_result
+        match strategy:
+            case WardTaggingStrategy.FIELD:
+                summary.members_tagged_from_field += 1
+            case WardTaggingStrategy.ADDRESS:
+                summary.members_tagged_from_address += 1
+            case WardTaggingStrategy.ZIPCODE:
+                summary.members_tagged_from_zipcode += 1
 
         for ward in wards:
             ward_tag_uuid = ward_id_uuid_map[ward]
@@ -108,6 +142,5 @@ def set_ward_tags_for_all_members_since(
             logging.info("person=%s: tagging to ward=%s (%s)",
                          member.identifier, ward_tag_uuid, ward)
             summary.taggings_added += 1
-        summary.members_tagged += 1
         summary.members_modified += 1
     return summary
