@@ -3,12 +3,12 @@ from __future__ import annotations
 from datetime import datetime
 import json
 import logging
-from typing import Any, Optional, TYPE_CHECKING
+from typing import Any, cast, Optional, TYPE_CHECKING
 
 import requests
 
 if TYPE_CHECKING:
-    from ueil_tagger.types import Uuid
+    from ueil_tagger.types import Uuid, WebAPIRecord
 
 
 PEOPLE_ENDPOINT="https://actionnetwork.org/api/v2/people"
@@ -46,13 +46,17 @@ class Client:
             params["background_request"] = "true"
         logging.debug("(POST) %s params=(%s) data=(%s)",
                       url, json.dumps(params), json.dumps(data))
-        rs = requests.post(url, data, headers=headers, params=params,
+        rs = requests.post(url, json=data, headers=headers, params=params,
                            timeout=10)
         logging.debug("...%s: %s bytes", rs.status_code, len(rs.content))
+        if not rs.ok:
+            logging.error("Unexpected response from the server:\n%s",
+                          rs.text)
         return rs.ok
 
 
-    def __get(self, url: str, params: Optional[dict[str, str]] = None) -> Any:
+    def __get(self, url: str,
+              params: Optional[dict[str, str]] = None) -> WebAPIRecord:
         if not params:
             params = {}
         headers =  {
@@ -62,10 +66,10 @@ class Client:
         logging.debug("(GET) %s params=(%s)", url, json.dumps(params))
         rs = requests.get(url, params=params, headers=headers, timeout=10)
         logging.debug("...%s: %s bytes", rs.status_code, len(rs.content))
-        return rs.json()
+        return cast("WebAPIRecord", rs.json())
 
 
-    def get_tags(self, page: int = 1) -> Any:
+    def get_tags(self, page: int = 1) -> WebAPIRecord:
         params = {
             "page": str(page)
         }
@@ -73,7 +77,7 @@ class Client:
 
 
     def get_people(self, page: int = 1,
-                   modified_since: Optional[datetime] = None) -> Any:
+                   modified_since: Optional[datetime] = None) -> WebAPIRecord:
         params = {
             "page": str(page)
         }
@@ -82,7 +86,7 @@ class Client:
         return self.__get(PEOPLE_ENDPOINT, params)
 
 
-    def get_person(self, person_uuid: Uuid) -> Any:
+    def get_person(self, person_uuid: Uuid) -> WebAPIRecord:
         url = f"{PEOPLE_ENDPOINT}/{person_uuid}"
         return self.__get(url, {})
 

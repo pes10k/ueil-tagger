@@ -9,9 +9,10 @@ import ueil_tagger
 import ueil_tagger.client
 import ueil_tagger.config
 import ueil_tagger.members
+import ueil_tagger.types
 
 
-last_run_datetime = ueil_tagger.config.get_last_run()
+LAST_RUN_DATETIME = ueil_tagger.config.get_last_run()
 
 PARSER = argparse.ArgumentParser(
     prog=ueil_tagger.APP_NAME,
@@ -35,9 +36,15 @@ PARSER.add_argument(
          "the ward.")
 PARSER.add_argument(
     "--since",
-    default=last_run_datetime.isoformat() if last_run_datetime else None,
+    default=LAST_RUN_DATETIME.isoformat() if LAST_RUN_DATETIME else None,
     help="If provided, only modify members who's information has changed since "
-         "the given date (date should be provided in ISO format).")
+         "the given date (date should be provided in ISO 8601 format). If "
+         "a timezone isn't included, assumes UTC.")
+PARSER.add_argument(
+    "--uuid",
+    nargs="*",
+    help="If provided, then only the specified person records are loaded and "
+         "modified. In this case, the --since argument is ignored.")
 PARSER.add_argument(
     "--verbose", "-v",
     action="count",
@@ -47,18 +54,6 @@ PARSER.add_argument(
          "error messages are logged).")
 ARGS = PARSER.parse_args()
 
-UPDATED_SINCE = None
-if ARGS.since:
-    try:
-        UPDATED_SINCE = datetime.datetime.fromisoformat(ARGS.since)
-    except ValueError:
-        logging.error("Invalid date for --since argument: %s", UPDATED_SINCE)
-        sys.exit(1)
-
-if not ARGS.api_key:
-    logging.error("Must provide am API key, either with --api-key or in 'config.toml'")
-    sys.exit(1)
-
 if ARGS.verbose == 0:
     logging.basicConfig(level=logging.ERROR)
 elif ARGS.verbose == 1:
@@ -66,10 +61,41 @@ elif ARGS.verbose == 1:
 else:
     logging.basicConfig(level=logging.DEBUG)
 
-CLIENT = ueil_tagger.client.Client(ARGS.api_key)
+if not ARGS.api_key:
+    logging.error("Must provide an API key, either with --api-key or "
+                  "in 'config.toml'")
+    sys.exit(1)
 
-SUMMARY = ueil_tagger.members.set_ward_tags_for_all_members_since(
-    CLIENT, ARGS.min_sqft, UPDATED_SINCE)
-ueil_tagger.config.set_last_run(datetime.datetime.now(datetime.timezone.utc))
+CLIENT = ueil_tagger.client.Client(ARGS.api_key)
+UPDATED_SINCE = None
+SUMMARY = None
+
+if ARGS.uuid:
+    SUMMARY = ueil_tagger.types.TaggingsSummary()
+    for person_uuid in ARGS.uuid:
+        is_success, _ = ueil_tagger.members.set_ward_tags_for_member_uuid(
+                CLIENT, person_uuid, ARGS.min_sqft, SUMMARY)
+        if not is_success:
+            sys.exit(1)
+
+else:
+    if ARGS.since:
+        try:
+            UPDATED_SINCE = datetime.datetime.fromisoformat(ARGS.since)
+            # If a timezone wasn't included, use the local system timezone.
+            if not UPDATED_SINCE.tzname():
+                local_tz = datetime.datetime.now().astimezone().tzinfo
+                UPDATED_SINCE = UPDATED_SINCE.replace(tzinfo=local_tz)
+                logging.info("Date for --since did not include a timezone; Using "
+                            "the system timezone '%s'.", UPDATED_SINCE.tzname())
+        except ValueError:
+            logging.error("Invalid date for --since argument: '%s'. Must", ARGS.since)
+            sys.exit(1)
+
+    SUMMARY = ueil_tagger.members.set_ward_tags_for_all_members_since(
+        CLIENT, ARGS.min_sqft, UPDATED_SINCE)
+    ueil_tagger.config.set_last_run(datetime.datetime.now(datetime.timezone.utc))
+
+assert SUMMARY
 print(SUMMARY.to_json())
 sys.exit(0)

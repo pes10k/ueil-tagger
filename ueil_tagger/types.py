@@ -1,7 +1,7 @@
 from enum import Enum, auto
 from dataclasses import dataclass
 import json
-from typing import Optional
+from typing import Any, Optional
 
 
 @dataclass
@@ -10,12 +10,14 @@ class Coords:
     long: float
 
 
+WebAPIRecord = dict[str, Any]
 ConfigSettings = dict[str, str | float]
 Uuid = str
 WardNum = int
 ZipCode = int
 
 WardZipData = dict[ZipCode, list[tuple[WardNum, float]]]
+WardToTagMap = dict[WardNum, Uuid]
 SigWardZipData = dict[ZipCode, list[WardNum]]
 
 
