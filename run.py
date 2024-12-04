@@ -24,8 +24,8 @@ PARSER = argparse.ArgumentParser(
                 "    assume thats correct and use that value. Otherwise...\n"
                 "  - If the member provided something that looks like a\n"
                 "    complete street address, try to geocode that address\n"
-                "    using the www.openstreetmap.org API, and see if it falls\n"
-                "    with in a Chicago Ward. Otherwise...\n"
+                "    using the www.openstreetmap.org API, and see if it\n"
+                "    falls with in a Chicago Ward. Otherwise...\n"
                 "  - If the member provided a zipcode, see if that zipcode\n"
                 "    overlaps with any Chicago Wards (based on data from\n"
                 "    www.chicagocityscape.com), and if so, tag the member\n"
@@ -48,14 +48,14 @@ PARSER.add_argument(
     default=ueil_tagger.config.get_min_zip_sqft(),
     type=float,
     help="The minimum number of square feet that a zipcode must overlap with "
-         "a ward's area in order for members in that zipcode to be tagged with "
+         "a ward's area in order for members in that zipcode to be tagged "
          "the ward. (default: %(default)s)")
 PARSER.add_argument(
     "--since",
     default=LAST_RUN_DATETIME.isoformat() if LAST_RUN_DATETIME else None,
-    help="If provided, only modify members who's information has changed since "
-         "the given date (date should be provided in ISO 8601 format). If "
-         "a timezone isn't included, assumes UTC. (default: %(default)s)")
+    help="If provided, only modify members who's information has changed "
+         "since the given date (date should be provided in ISO 8601 format). "
+         "If a timezone isn't included, assumes UTC. (default: %(default)s)")
 PARSER.add_argument(
     "--uuid",
     nargs="*",
@@ -63,12 +63,20 @@ PARSER.add_argument(
          "modified. In this case, the --since argument is ignored. "
          "(default: %(default)s)")
 PARSER.add_argument(
+    "--dry-run",
+    help="Don't make any changes to the database, just print information as "
+         "if changes were being made. What messages are printed is controlled "
+         "by --verbose.",
+    action="store_true",
+    default=False
+)
+PARSER.add_argument(
     "--verbose", "-v",
     action="count",
     default=0,
-    help="If provided once, then info messages are logged. If provided two or "
-         "more times, then log debug messages (If not provided, then only "
-         "error messages are logged). (default: %(default)s)")
+    help="If provided once, then print info messages. If provided two or "
+         "more times, then also print debug messages (If not provided, then "
+         "only error messages are printed). (default: %(default)s)")
 ARGS = PARSER.parse_args()
 
 if ARGS.verbose == 0:
@@ -83,16 +91,15 @@ if not ARGS.api_key:
                   "in 'config.toml'")
     sys.exit(1)
 
-CLIENT = ueil_tagger.client.Client(ARGS.api_key)
+CLIENT = ueil_tagger.client.Client(ARGS.api_key, ARGS.dry_run)
 UPDATED_SINCE = None
 SUMMARY = None
 
 if ARGS.uuid:
-    SUMMARY = ueil_tagger.types.TaggingsSummary()
     for person_uuid in ARGS.uuid:
-        is_success, _ = ueil_tagger.members.set_ward_tags_for_member_uuid(
+        SUMMARY = ueil_tagger.members.set_ward_tags_for_member_uuid(
                 CLIENT, person_uuid, ARGS.min_sqft, SUMMARY)
-        if not is_success:
+        if SUMMARY.encountered_error():
             sys.exit(1)
 
 else:
@@ -103,15 +110,19 @@ else:
             if not UPDATED_SINCE.tzname():
                 local_tz = datetime.datetime.now().astimezone().tzinfo
                 UPDATED_SINCE = UPDATED_SINCE.replace(tzinfo=local_tz)
-                logging.info("Date for --since did not include a timezone; Using "
-                            "the system timezone '%s'.", UPDATED_SINCE.tzname())
+                logging.info("Date for --since did not include a timezone; "
+                             "Using the system timezone '%s'.",
+                             UPDATED_SINCE.tzname())
         except ValueError:
-            logging.error("Invalid date for --since argument: '%s'. Must", ARGS.since)
+            logging.error("Invalid date for --since argument: '%s'. Must",
+                          ARGS.since)
             sys.exit(1)
 
     SUMMARY = ueil_tagger.members.set_ward_tags_for_all_members_since(
         CLIENT, ARGS.min_sqft, UPDATED_SINCE)
-    ueil_tagger.config.set_last_run(datetime.datetime.now(datetime.timezone.utc))
+    if not ARGS.dry_run:
+        NOW_UTC_TIME = datetime.datetime.now(datetime.timezone.utc)
+        ueil_tagger.config.set_last_run(NOW_UTC_TIME)
 
 assert SUMMARY
 print(SUMMARY.to_json())

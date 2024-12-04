@@ -36,6 +36,7 @@ class TaggingsSummary:
     members_tagged_from_address: int = 0
     members_tagged_from_zipcode: int = 0
     members_not_tagged: int = 0
+    error_count: int = 0
 
     def to_json(self) -> str:
         summary = {
@@ -46,8 +47,12 @@ class TaggingsSummary:
             "members tagged from address": self.members_tagged_from_address,
             "members tagged from zipcode": self.members_tagged_from_zipcode,
             "members not tagged": self.members_not_tagged,
+            "errors": self.error_count
         }
         return json.dumps(summary)
+
+    def encountered_error(self) -> bool:
+        return self.error_count > 0
 
 
 @dataclass

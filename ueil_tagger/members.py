@@ -10,7 +10,7 @@ from ueil_tagger.types import Member, TaggingsSummary, WardTaggingStrategy
 from ueil_tagger.wards import get_ward_id_to_uuid_map, wards_for_member
 
 if TYPE_CHECKING:
-    from ueil_tagger.types import Uuid, WardNum, ZipCode, WardToTagMap
+    from ueil_tagger.types import Uuid, ZipCode, WardToTagMap
     from ueil_tagger.types import WebAPIRecord
 
 
@@ -41,7 +41,7 @@ def get_member_from_record(record: WebAPIRecord) -> Optional[Member]:
     record_uuid = uuid_for_member_record(record)
     if not record_uuid:
         logging.error("Unable to find an action network identifier for "
-                        "record:\n%s", json.dumps(record))
+                      "record:\n%s", json.dumps(record))
         return None
 
     if "postal_addresses" not in record:
@@ -64,13 +64,13 @@ def get_member_from_record(record: WebAPIRecord) -> Optional[Member]:
     zipcode = field_to_zip(possible_zipcode)
 
     member = Member(record_uuid, address.get("address_lines"),
-        address.get("locality"), address.get("region"),
-        zipcode, custom_field_ward)
+                    address.get("locality"), address.get("region"),
+                    zipcode, custom_field_ward)
     return member
 
 
-def get_members_updated_since(client: Client,
-                              since: Optional[datetime] = None) -> list[Member]:
+def get_members_updated_since(
+        client: Client, since: Optional[datetime] = None) -> list[Member]:
     members = []
     page_index = 1
     while True:
@@ -93,9 +93,10 @@ def get_members_updated_since(client: Client,
                 modified_date = record["modified_date"]
                 modified_date = datetime.fromisoformat(modified_date)
                 if modified_date < since:
-                    raise ValueError("Unexpected person result\n"
-                                     f"person={member.identifier}: was updated "
-                                     f"after the given date '{modified_date}'")
+                    raise ValueError(
+                        "Unexpected person result\n"
+                        f"person={member.identifier}: was updated "
+                        f"after the given date '{modified_date}'")
             members.append(member)
         page_index += 1
     return members
@@ -118,7 +119,7 @@ def clear_ward_tags_from_member(client: Client, member: Member,
 
 def set_ward_tags_for_member_uuid(
         client: Client, person_uuid: Uuid, min_sqft: int,
-        summary: Optional[TaggingsSummary] = None) -> tuple[bool, TaggingsSummary]:
+        summary: Optional[TaggingsSummary] = None) -> TaggingsSummary:
     if not summary:
         summary = TaggingsSummary()
     result = client.get_person(person_uuid)
@@ -126,11 +127,12 @@ def set_ward_tags_for_member_uuid(
     if not member:
         logging.error("Unable to load a person result for uuid=%s",
                       person_uuid)
-        return False, summary
+        summary.error_count += 1
+        return summary
     ward_to_tag_map = get_ward_id_to_uuid_map(client)
     set_ward_tags_for_member(client, member, min_sqft, ward_to_tag_map,
                              summary)
-    return True, summary
+    return summary
 
 
 def set_ward_tags_for_member(
@@ -142,17 +144,17 @@ def set_ward_tags_for_member(
     if not ward_to_tag_map:
         ward_to_tag_map = get_ward_id_to_uuid_map(client)
 
-    num_tagggings_removed = clear_ward_tags_from_member(client, member,
-                                                        ward_to_tag_map)
-    summary.taggings_deleted += num_tagggings_removed
+    num_taggings_removed = clear_ward_tags_from_member(client, member,
+                                                       ward_to_tag_map)
+    summary.taggings_deleted += num_taggings_removed
     ward_result = wards_for_member(member, min_sqft)
 
     if not ward_result:
         summary.members_not_tagged += 1
-        if num_tagggings_removed > 0:
+        if num_taggings_removed > 0:
             summary.members_modified += 1
         logging.info("person=%s: not tagging to any wards",
-                        member.identifier)
+                     member.identifier)
         return summary
 
     wards, strategy = ward_result
@@ -168,7 +170,7 @@ def set_ward_tags_for_member(
         ward_tag_uuid = ward_to_tag_map[ward]
         client.set_tagging_for_person(ward_tag_uuid, member.identifier)
         logging.info("person=%s: tagging to ward=%s (%s)",
-                        member.identifier, ward_tag_uuid, ward)
+                     member.identifier, ward_tag_uuid, ward)
         summary.taggings_added += 1
     summary.members_modified += 1
     return summary

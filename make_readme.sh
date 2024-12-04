@@ -12,7 +12,7 @@ source "$DIR/../bin/activate";
 "$DIR"/run.py --help > README.txt;
 
 # If the current install has a config file, then make sure the
-# values in the config file dont wind up in the public README.
+# values in the config file don't wind up in the public README.
 if [[ -f "$CONFIG_FILE" ]]; then
   for KEY_TO_REDACT in "action-network-api-key" "cache-dir"; do
     VALUE_TO_REDACT=$(grep -Eo "$KEY_TO_REDACT = \"(.*)\"" "$CONFIG_FILE" | sed -E "s/$KEY_TO_REDACT = \"(.*)\"/\1/");

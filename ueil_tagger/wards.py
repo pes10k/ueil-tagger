@@ -16,8 +16,9 @@ from ueil_tagger.types import Member, WardTaggingStrategy
 
 if TYPE_CHECKING:
     from shapely import MultiPolygon
-    from ueil_tagger.types import Uuid, WardNum, ZipCode
     from ueil_tagger.types import WardZipData, SigWardZipData, WardToTagMap
+    from ueil_tagger.types import WardNum
+    WardLookupResult = Optional[tuple[list[WardNum], WardTaggingStrategy]]
 
 
 @dataclass
@@ -72,7 +73,7 @@ def ward_for_address(address: str) -> Optional[WardNum]:
 
 
 def wards_for_member(member: Member,
-                     min_ward_sqft: int) -> Optional[tuple[list[WardNum], WardTaggingStrategy]]:
+                     min_ward_sqft: int) -> WardLookupResult:
     sig_wards_for_zip = significant_wards_for_zip(min_ward_sqft)
     ward: int | None = None
     if member.custom_field_ward:
@@ -85,8 +86,9 @@ def wards_for_member(member: Member,
         if member_address:
             ward = ward_for_address(member_address)
             if ward:
-                logging.debug("person=%s: assigned ward '%s' by geocoding '%s'",
-                              member.identifier, ward, member_address)
+                logging.debug(
+                    "person=%s: assigned ward '%s' by geocoding '%s'",
+                    member.identifier, ward, member_address)
                 return ([ward], WardTaggingStrategy.ADDRESS)
             logging.error("person=%s: couldn't geocode ward from address '%s'",
                           member.identifier, member_address)

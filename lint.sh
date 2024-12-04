@@ -1,4 +1,4 @@
 #!/bin/bash
 
-pylint .
+flake8
 mypy --strict .
