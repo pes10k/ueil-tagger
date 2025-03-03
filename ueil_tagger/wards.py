@@ -45,7 +45,7 @@ def load_wards_for_zip_data() -> WardZipData:
     data = json.loads(ward_data_path.read_text())
     ward_zip_data: WardZipData = {}
     for key, value in data.items():
-        ward_zip_data[key] = value
+        ward_zip_data[int(key)] = value
     return ward_zip_data
 
 

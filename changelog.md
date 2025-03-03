@@ -1,3 +1,9 @@
+0.3
+---
+Fix issue where types in zip -> ward mapping data caused wards to not be tagged
+by zipcode.
+
+
 0.2
 ---
 Add --dry-run option, to allow changes to be previewed without actually
