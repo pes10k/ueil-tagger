@@ -6,6 +6,7 @@ import logging
 import sys
 
 import ueil_tagger
+import ueil_tagger.cache
 import ueil_tagger.client
 import ueil_tagger.config
 import ueil_tagger.members
@@ -57,6 +58,20 @@ PARSER.add_argument(
          "since the given date (date should be provided in ISO 8601 format). "
          "If a timezone isn't included, assumes UTC. (default: %(default)s)")
 PARSER.add_argument(
+    "--batch",
+    help="If provided, keep track of person uuids that have been updated "
+         "within a 'batch', to prevent repeatedly updating the same records.",
+    default=False,
+    action="store_true"
+)
+PARSER.add_argument(
+    "--clear-batch-cache",
+    help="If provided, reset the existing batch cache before updating any "
+         "member tags.",
+    default=False,
+    action="store_true"
+)
+PARSER.add_argument(
     "--uuid",
     nargs="*",
     help="If provided, then only the specified person records are loaded and "
@@ -95,13 +110,17 @@ CLIENT = ueil_tagger.client.Client(ARGS.api_key, ARGS.dry_run)
 UPDATED_SINCE = None
 SUMMARY = None
 
+if ARGS.clear_batch_cache:
+    logging.info("Clearing batch cache")
+    CACHE = ueil_tagger.cache.TaggerCache()
+    CACHE.clear_member_uuid_cache()
+
 if ARGS.uuid:
     for person_uuid in ARGS.uuid:
         SUMMARY = ueil_tagger.members.set_ward_tags_for_member_uuid(
                 CLIENT, person_uuid, ARGS.min_sqft, SUMMARY)
         if SUMMARY.encountered_error():
             sys.exit(1)
-
 else:
     if ARGS.since:
         try:
@@ -119,7 +138,7 @@ else:
             sys.exit(1)
 
     SUMMARY = ueil_tagger.members.set_ward_tags_for_all_members_since(
-        CLIENT, ARGS.min_sqft, UPDATED_SINCE)
+        CLIENT, ARGS.min_sqft, ARGS.batch, UPDATED_SINCE)
     if not ARGS.dry_run:
         NOW_UTC_TIME = datetime.datetime.now(datetime.timezone.utc)
         ueil_tagger.config.set_last_run(NOW_UTC_TIME)

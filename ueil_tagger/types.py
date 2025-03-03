@@ -15,6 +15,8 @@ ConfigSettings = dict[str, str | float]
 Uuid = str
 WardNum = int
 ZipCode = int
+StreetAddress = str
+LatLong = tuple[float, float]
 
 WardZipData = dict[ZipCode, list[tuple[WardNum, float]]]
 WardToTagMap = dict[WardNum, Uuid]

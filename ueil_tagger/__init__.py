@@ -1,5 +1,5 @@
 __author__ = "Peter Snyder"
-__version__ = "0.3"
+__version__ = "0.4"
 
 
 from pathlib import Path

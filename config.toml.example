@@ -8,4 +8,4 @@ cache-dir = ""
 # The minimum number of sqft a ward needs to be included in a zipcode area
 # for us to assign the ward as a possible ward for people living in that
 # zipcode.
-min-zip-sqft = 10000
+min-zip-sqft = 12500

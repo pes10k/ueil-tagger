@@ -1,6 +1,7 @@
 usage: UE IL Member Tagger [-h] [--version] [--api-key API_KEY]
-                           [--min-sqft MIN_SQFT] [--since SINCE]
-                           [--uuid [UUID ...]] [--dry-run] [--verbose]
+                           [--min-sqft MIN_SQFT] [--since SINCE] [--batch]
+                           [--clear-batch-cache] [--uuid [UUID ...]]
+                           [--dry-run] [--verbose]
 
 Updates the Ward tags in the UE IL ActionNetwork database.
 Decides which ward(s) to tag the member with as follows:
@@ -27,11 +28,16 @@ options:
                        environmentalists-il/apis. (default: -----)
   --min-sqft MIN_SQFT  The minimum number of square feet that a zipcode must
                        overlap with a ward's area in order for members in that
-                       zipcode to be tagged the ward. (default: 10000)
+                       zipcode to be tagged the ward. (default: 12500)
   --since SINCE        If provided, only modify members who's information has
                        changed since the given date (date should be provided
                        in ISO 8601 format). If a timezone isn't included,
-                       assumes UTC. (default: None)
+                       assumes UTC. (default: -----)
+  --batch              If provided, keep track of person uuids that have been
+                       updated within a 'batch', to prevent repeatedly
+                       updating the same records.
+  --clear-batch-cache  If provided, reset the existing batch cache before
+                       updating any member tags.
   --uuid [UUID ...]    If provided, then only the specified person records are
                        loaded and modified. In this case, the --since argument
                        is ignored. (default: None)

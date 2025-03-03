@@ -162,4 +162,5 @@ cython_debug/
 .DS_Store
 config.toml
 app_state/last_run.txt
-app_state/cache.db*
+app_state/addresses/cache.db*
+app_state/batch/cache.db*

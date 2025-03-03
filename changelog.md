@@ -1,3 +1,9 @@
+0.4
+---
+Add caching (i.e., `--batch` and `--clear-batch`) to track state of partial
+updates of the database.
+
+
 0.3
 ---
 Fix issue where types in zip -> ward mapping data caused wards to not be tagged

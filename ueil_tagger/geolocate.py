@@ -1,19 +1,19 @@
 import logging
 from typing import Optional
 
-from diskcache import Cache
 from geopy.geocoders import Nominatim
 
 import ueil_tagger
-from ueil_tagger import STATE_DIR_PATH
+from ueil_tagger.cache import TaggerCache
 from ueil_tagger.types import Coords
 
 
 def coords_for_address(address: str) -> Optional[Coords]:
     logging.debug(" - About to geocode '%s'", address)
-    cache = Cache(STATE_DIR_PATH)
-    if address in cache:
-        cached_coords = Coords(*cache[address])
+    cache = TaggerCache()
+    cache_result = cache.get_for_address(address)
+    if cache_result:
+        cached_coords = Coords(*cache_result)
         logging.debug(" * Geocode cache '%s' to (lat=%s, long=%s)",
                       address, cached_coords.lat, cached_coords.long)
         return cached_coords
@@ -27,6 +27,5 @@ def coords_for_address(address: str) -> Optional[Coords]:
                   address, location.latitude, location.longitude)
     coords = Coords(location.latitude, location.longitude)
 
-    cache[address] = (coords.lat, coords.long)
-    cache.close()
+    cache.set_for_address(address, (coords.lat, coords.long))
     return coords

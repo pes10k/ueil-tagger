@@ -5,13 +5,13 @@ import json
 import logging
 from typing import Optional, TYPE_CHECKING
 
+from ueil_tagger.cache import TaggerCache
 from ueil_tagger.client import Client
 from ueil_tagger.types import Member, TaggingsSummary, WardTaggingStrategy
 from ueil_tagger.wards import get_ward_id_to_uuid_map, wards_for_member
 
 if TYPE_CHECKING:
-    from ueil_tagger.types import Uuid, ZipCode, WardToTagMap
-    from ueil_tagger.types import WebAPIRecord
+    from ueil_tagger.types import Uuid, ZipCode, WardToTagMap, WebAPIRecord
 
 
 def field_to_zip(field: Optional[str]) -> Optional[ZipCode]:
@@ -178,6 +178,7 @@ def set_ward_tags_for_member(
 
 def set_ward_tags_for_all_members_since(
         client: Client, min_sqft: int,
+        batch: bool = False,
         since: Optional[datetime] = None) -> TaggingsSummary:
     summary = TaggingsSummary()
     if since:
@@ -185,9 +186,31 @@ def set_ward_tags_for_all_members_since(
     else:
         logging.info("Tagging all members")
 
+    batch_cache: Optional[TaggerCache] = None
+    if batch:
+        logging.info("Updating members who are not in batch")
+        batch_cache = TaggerCache()
+
     ward_to_tag_map = get_ward_id_to_uuid_map(client)
     members = get_members_updated_since(client, since)
+    members.sort(key=lambda m: m.identifier)
+
+    num_members = len(members)
+    logging.info("%s members to update", num_members)
+    member_index = 0
     for member in members:
-        set_ward_tags_for_member(client, member, min_sqft, ward_to_tag_map,
-                                 summary)
+        member_index += 1
+        member_uuid = member.identifier
+        if batch_cache and batch_cache.check_member_uuid(member_uuid):
+            logging.info("(%s/%s) Skipping member %s, in cache",
+                         member_index, num_members, member_uuid)
+            continue
+        else:
+            logging.info("(%s/%s) Updating member %s",
+                         member_index, num_members, member_uuid)
+            set_ward_tags_for_member(client, member, min_sqft, ward_to_tag_map,
+                                     summary)
+            if batch_cache:
+                logging.info("Saving %s in cache", member_uuid)
+                batch_cache.set_member_uuid(member_uuid)
     return summary
